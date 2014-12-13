@@ -1,124 +1,124 @@
-/* jshint mocha: true */
-
 'use strict';
 
+var _ = require('underscore');
 var fs = require('fs');
-var should = require('should');
+var test = require('tape');
 
-describe('requirer', function() {
+test('requirer', function(t) {
 
-  var Requirer = require('../requirer');
+  var Requirer = require('../');
 
-  describe('Constructor', function() {
-    it('should throw when missing options', function() {
-      /* jshint nonew: false */
-      (function() { new Requirer(); }
-        .should.throw('Requirer must have a "filename"'));
-    });
-    it('should return instances with "new"', function() {
-      (new Requirer('test/fixtures/module.js'))
-        .should.be.instanceof(Requirer);
-    });
-    it('should return instances without "new"', function() {
-      Requirer('test/fixtures/module.js')
-        .should.be.instanceof(Requirer);
-    });
+  t.test('Constructor when missing options', function(t) {
+    /* jshint nonew: false */
+    t.throws(function() { new Requirer(); }, /Requirer must have a "filename"/);
+    t.end();
   });
 
-  describe('"options" get set', function() {
-    var origNodeEnv = process.env.NODE_ENV;
-
-    beforeEach(function() {
-      process.env.NODE_ENV = origNodeEnv;
-    });
-
-    after(function() {
-      process.env.NODE_ENV = origNodeEnv;
-    });
-
-    it('should by default not have "hotreplacement" in production', function() {
-      process.env.NODE_ENV = 'production';
-      var moduleModule = Requirer('test/fixtures/module.js');
-      moduleModule._hotreplacement.should.be.false;
-    });
-
-    it('should by default have "hotreplacement" in non-production', function() {
-      process.env.NODE_ENV = 'whatever';
-      var moduleModule = Requirer('test/fixtures/module.js');
-      moduleModule._hotreplacement.should.be.true;
-    });
-
-    it('should honor "hotreplacement" option in production', function() {
-      process.env.NODE_ENV = 'production';
-      var moduleModule;
-      moduleModule = Requirer('test/fixtures/module.js', { hotreplacement: true });
-      moduleModule._hotreplacement.should.be.true;
-      moduleModule = Requirer('test/fixtures/module.js', { hotreplacement: false });
-      moduleModule._hotreplacement.should.be.false;
-    });
-
-    it('should honor "hotreplacement" option in non-production', function() {
-      process.env.NODE_ENV = 'whatever';
-      Requirer('test/fixtures/module.js', { hotreplacement: true })._hotreplacement.should.be.true;
-      Requirer('test/fixtures/module.js', { hotreplacement: false })._hotreplacement.should.be.false;
-    });
+  t.test('Constructor return instances with "new"', function(t) {
+    t.ok((new Requirer('test/fixtures/module.js')) instanceof Requirer);
+    t.end();
   });
 
-  describe('#load', function() {
-    it('should have mtime', function() {
-      var moduleModule = Requirer('test/fixtures/module.js');
-      moduleModule.load();
-      moduleModule._mtime.should.be.a.Number;
-    });
-    it('should have module', function() {
-      var moduleModule = Requirer('test/fixtures/module.js');
-      moduleModule.load();
-      moduleModule._module.should.be.an.Object;
-      moduleModule._module.exports.should.be.an.Object;
-    });
-    it('should have loaded with "exports()"', function() {
-      var moduleModule = Requirer('test/fixtures/module.js');
-      moduleModule.exports();
-      moduleModule._module.should.be.an.Object;
-      moduleModule._module.exports.should.be.an.Object;
-    });
+  t.test('Constructor return instances without "new"', function(t) {
+    t.ok(Requirer('test/fixtures/module.js') instanceof Requirer);
+    t.end();
   });
 
-  describe('#load with "hotreplacement" off', function() {
-    it('exported should not change when nothing changed', function() {
-      var moduleModule = Requirer('test/fixtures/module.js', { hotreplacement: false });
-      moduleModule.exports().newValue = 123;
-      moduleModule.exports().newValue.should.equal(123);
-    });
-    it('exported should not change when file changes', function() {
-      var moduleModule = Requirer('test/fixtures/module.js', { hotreplacement: false });
-      moduleModule.exports().newValue = 123;
-      var newTime = (Date.now() / 1000) + Math.floor( Math.random() * 100 );
-      fs.utimesSync(moduleModule._filename, newTime, newTime);
-      moduleModule.exports().newValue.should.equal(123);
-    });
+  t.test('by default no "hotreplacement" in production', function(t) {
+    process.env.NODE_ENV = 'production';
+    var moduleModule = Requirer('test/fixtures/module.js');
+    t.equal(moduleModule._hotreplacement, false);
+    t.end();
   });
 
-  describe('#load with "hotreplacement" off', function() {
-    it('exported should not change when nothing changed', function() {
-      var moduleModule = Requirer('test/fixtures/module.js', { hotreplacement: true });
-      moduleModule.exports().newValue = 123;
-      moduleModule.exports().newValue.should.equal(123);
-    });
-    it('exported should change when file changes', function() {
-      var moduleModule = Requirer('test/fixtures/module.js', { hotreplacement: true });
-      moduleModule.exports().newValue = 123;
-      var newTime = (Date.now() / 1000) + Math.floor( Math.random() * 100 );
-      fs.utimesSync(moduleModule._filename, newTime, newTime);
-      should(moduleModule.exports().newValue).not.equal(123);
-    });
+  t.test('by default have "hotreplacement" in non-production', function(t) {
+    process.env.NODE_ENV = 'development';
+    var moduleModule = Requirer('test/fixtures/module.js');
+    t.equal(moduleModule._hotreplacement, true);
+    t.end();
   });
 
-  describe('module limitations', function() {
-    it('exported should not have access to "require"', function() {
-      var moduleModule = Requirer('test/fixtures/module.js');
-      moduleModule.exports().fs.should.throw();
-    });
+  t.test('honor "hotreplacement" option in production', function(t) {
+    process.env.NODE_ENV = 'production';
+    var moduleModule;
+    moduleModule = Requirer('test/fixtures/module.js', { hotreplacement: true });
+    t.equal(moduleModule._hotreplacement, true);
+    moduleModule = Requirer('test/fixtures/module.js', { hotreplacement: false });
+    t.equal(moduleModule._hotreplacement, false);
+    t.end();
   });
+
+  t.test('honor "hotreplacement" option in non-production', function(t) {
+    process.env.NODE_ENV = 'development';
+    var moduleModule;
+    moduleModule = Requirer('test/fixtures/module.js', { hotreplacement: true });
+    t.equal(moduleModule._hotreplacement, true);
+    moduleModule = Requirer('test/fixtures/module.js', { hotreplacement: false });
+    t.equal(moduleModule._hotreplacement, false);
+    t.end();
+  });
+
+  t.test('#load -> mtime', function(t) {
+    var moduleModule = Requirer('test/fixtures/module.js');
+    moduleModule.load();
+    t.ok(_.isNumber(moduleModule._mtime));
+    t.end();
+  });
+
+  t.test('#load -> module', function(t) {
+    var moduleModule = Requirer('test/fixtures/module.js');
+    moduleModule.load();
+    t.ok(_.isObject(moduleModule._module));
+    t.ok(_.isObject(moduleModule._module.exports));
+    t.end();
+  });
+
+  t.test('exports()', function(t) {
+    var moduleModule = Requirer('test/fixtures/module.js');
+    moduleModule.exports();
+    t.ok(_.isObject(moduleModule._module));
+    t.ok(_.isObject(moduleModule._module.exports));
+    t.end();
+  });
+
+  t.test('with "hotreplacement" off exported should not change when nothing changed', function(t) {
+    var moduleModule = Requirer('test/fixtures/module.js', { hotreplacement: false });
+    moduleModule.exports().newValue = 123;
+    t.equal(moduleModule.exports().newValue, 123);
+    t.end();
+  });
+
+  t.test('with "hotreplacement" off exported should not change when file changes', function(t) {
+    var moduleModule = Requirer('test/fixtures/module.js', { hotreplacement: false });
+    moduleModule.exports().newValue = 123;
+    var newTime = (Date.now() / 1000) + Math.floor( Math.random() * 100 );
+    fs.utimesSync(moduleModule._filename, newTime, newTime);
+    t.equal(moduleModule.exports().newValue, 123);
+    t.end();
+  });
+
+  t.test('with "hotreplacement" on exported should not change when nothing changed', function(t) {
+    var moduleModule = Requirer('test/fixtures/module.js', { hotreplacement: true });
+    moduleModule.exports().newValue = 123;
+    t.equal(moduleModule.exports().newValue, 123);
+    t.end();
+  });
+
+  t.test('with "hotreplacement" on exported should change when file changes', function(t) {
+    var moduleModule = Requirer('test/fixtures/module.js', { hotreplacement: true });
+    moduleModule.exports().newValue = 123;
+    var newTime = (Date.now() / 1000) + Math.floor( Math.random() * 100 );
+    fs.utimesSync(moduleModule._filename, newTime, newTime);
+    t.notEqual(moduleModule.exports().newValue, 123);
+    t.end();
+  });
+
+  t.test('exported module should not have access to "require"', function(t) {
+    var moduleModule = Requirer('test/fixtures/module.js');
+    t.throws(moduleModule.exports().fs, /object is not a function/);
+    t.end();
+  });
+
+  t.end();
 
 });
