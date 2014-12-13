@@ -4,6 +4,11 @@
   "description": "pollen-requirer",
   "licence": "MIT",
   "author": "Andres Suarez <zertosh@gmail.com>",
+  "files": [
+    "README.md",
+    "requirer.js"
+  ],
+  "main": "requirer.js",
   "repository": {
     "type": "git",
     "url": "git://github.com/zertosh/pollen-requirer.git"
