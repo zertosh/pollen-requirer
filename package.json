@@ -2,6 +2,8 @@
   "name": "pollen-requirer",
   "version": "0.0.1",
   "description": "pollen-requirer",
+  "keywords": [],
+  "homepage": "https://github.com/zertosh/pollen-requirer",
   "licence": "MIT",
   "author": "Andres Suarez <zertosh@gmail.com>",
   "files": [
