@@ -6,119 +6,137 @@ var test = require('tape');
 
 test('requirer', function(t) {
 
-  var Requirer = require('../');
+  var requirer = require('../');
 
-  t.test('Constructor when missing options', function(t) {
+  t.test('missing options', function(t) {
     /* jshint nonew: false */
-    t.throws(function() { new Requirer(); }, /Requirer must have a "filename"/);
+    t.throws(function() { requirer(); }, /requirer: "filename" is required/);
     t.end();
   });
 
-  t.test('Constructor return instances with "new"', function(t) {
-    t.ok((new Requirer('test/fixtures/module.js')) instanceof Requirer);
+  t.test('instances', function(t) {
+    var modulePack = requirer('test/fixtures/module.js');
+    t.ok(modulePack instanceof requirer.Pack, 'is a Pack instance');
+    t.equal(requirer('test/fixtures/module.js'), modulePack, 'is the same Pack instance');
     t.end();
   });
 
-  t.test('Constructor return instances without "new"', function(t) {
-    t.ok(Requirer('test/fixtures/module.js') instanceof Requirer);
+  t.test('dispose', function(t) {
+    var modulePack = requirer('test/fixtures/module.js');
+    modulePack.exports();
+    t.notOk(modulePack._disposed, 'fresh pack is not disposed');
+    t.ok(requirer._cache[modulePack._filename], 'pack is in cache');
+    requirer.dispose(modulePack);
+    t.ok(modulePack._disposed, 'pack is disposed');
+    t.notOk(requirer._cache[modulePack._filename], 'pack is not in cache');
+    t.notOk(modulePack._mtime, 'cleaned up mtime');
+    t.notOk(modulePack._module, 'cleaned up exports');
     t.end();
   });
 
-  t.test('by default no "hotreplacement" in production', function(t) {
+  t.test('disabled "hotreload" in production', function(t) {
     process.env.NODE_ENV = 'production';
-    var moduleModule = Requirer('test/fixtures/module.js');
-    t.equal(moduleModule._hotreplacement, false);
+    var modulePack = requirer('test/fixtures/module.js');
+    t.equal(modulePack._hotreload, false, 'disabled "hotreload" option');
+    requirer.dispose(modulePack);
     t.end();
   });
 
-  t.test('by default have "hotreplacement" in non-production', function(t) {
+  t.test('enabled "hotreload" in non-production', function(t) {
     process.env.NODE_ENV = 'development';
-    var moduleModule = Requirer('test/fixtures/module.js');
-    t.equal(moduleModule._hotreplacement, true);
+    var modulePack = requirer('test/fixtures/module.js');
+    t.equal(modulePack._hotreload, true, 'enabled "hotreload" option');
+    requirer.dispose(modulePack);
     t.end();
   });
 
-  t.test('honor "hotreplacement" option in production', function(t) {
+
+  t.test('has "_mtime" after "exports()"', function(t) {
+    var modulePack = requirer('test/fixtures/module.js');
+    modulePack.exports();
+    t.ok(_.isNumber(modulePack._mtime), 'mtime is numeric');
+    requirer.dispose(modulePack);
+    t.end();
+  });
+
+  t.test('has "_module" after "exports()"', function(t) {
+    var modulePack = requirer('test/fixtures/module.js');
+    modulePack.exports();
+    t.ok(_.isObject(modulePack._module), '"_module" is object');
+    t.ok(_.isObject(modulePack._module.exports), '"_module.exports" is object');
+    requirer.dispose(modulePack);
+    t.end();
+  });
+
+  t.test('exported doesn’t change when "hotreload" is disabled', function(t) {
     process.env.NODE_ENV = 'production';
-    var moduleModule;
-    moduleModule = Requirer('test/fixtures/module.js', { hotreplacement: true });
-    t.equal(moduleModule._hotreplacement, true);
-    moduleModule = Requirer('test/fixtures/module.js', { hotreplacement: false });
-    t.equal(moduleModule._hotreplacement, false);
+    var modulePack = requirer('test/fixtures/module.js');
+    modulePack.exports().newValue = 123;
+    t.equal(modulePack.exports().newValue, 123);
+    requirer.dispose(modulePack);
     t.end();
   });
 
-  t.test('honor "hotreplacement" option in non-production', function(t) {
+  t.test('exported doesn’t change even if the file changes when "hotreload" is disabled', function(t) {
+    process.env.NODE_ENV = 'production';
+    var modulePack = requirer('test/fixtures/module.js');
+    modulePack.exports().newValue = 123;
+    var newTime = (Date.now() / 1000) + Math.floor(Math.random() * 100);
+    fs.utimesSync(modulePack._filename, newTime, newTime);
+    t.equal(modulePack.exports().newValue, 123);
+    requirer.dispose(modulePack);
+    t.end();
+  });
+
+  t.test('exported doesn’t change when "hotreload" is enabled but the file did not change', function(t) {
     process.env.NODE_ENV = 'development';
-    var moduleModule;
-    moduleModule = Requirer('test/fixtures/module.js', { hotreplacement: true });
-    t.equal(moduleModule._hotreplacement, true);
-    moduleModule = Requirer('test/fixtures/module.js', { hotreplacement: false });
-    t.equal(moduleModule._hotreplacement, false);
+    var modulePack = requirer('test/fixtures/module.js');
+    modulePack.exports().newValue = 123;
+    t.equal(modulePack.exports().newValue, 123);
+    requirer.dispose(modulePack);
     t.end();
   });
 
-  t.test('#load -> mtime', function(t) {
-    var moduleModule = Requirer('test/fixtures/module.js');
-    moduleModule.load();
-    t.ok(_.isNumber(moduleModule._mtime));
-    t.end();
-  });
-
-  t.test('#load -> module', function(t) {
-    var moduleModule = Requirer('test/fixtures/module.js');
-    moduleModule.load();
-    t.ok(_.isObject(moduleModule._module));
-    t.ok(_.isObject(moduleModule._module.exports));
-    t.end();
-  });
-
-  t.test('exports()', function(t) {
-    var moduleModule = Requirer('test/fixtures/module.js');
-    moduleModule.exports();
-    t.ok(_.isObject(moduleModule._module));
-    t.ok(_.isObject(moduleModule._module.exports));
-    t.end();
-  });
-
-  t.test('with "hotreplacement" off exported should not change when nothing changed', function(t) {
-    var moduleModule = Requirer('test/fixtures/module.js', { hotreplacement: false });
-    moduleModule.exports().newValue = 123;
-    t.equal(moduleModule.exports().newValue, 123);
-    t.end();
-  });
-
-  t.test('with "hotreplacement" off exported should not change when file changes', function(t) {
-    var moduleModule = Requirer('test/fixtures/module.js', { hotreplacement: false });
-    moduleModule.exports().newValue = 123;
+  t.test('exported changes when "hotreload" is enabled and the file changed', function(t) {
+    process.env.NODE_ENV = 'development';
+    var modulePack = requirer('test/fixtures/module.js');
+    modulePack.exports().newValue = 123;
     var newTime = (Date.now() / 1000) + Math.floor( Math.random() * 100 );
-    fs.utimesSync(moduleModule._filename, newTime, newTime);
-    t.equal(moduleModule.exports().newValue, 123);
+    fs.utimesSync(modulePack._filename, newTime, newTime);
+    t.notEqual(modulePack.exports().newValue, 123);
+    requirer.dispose(modulePack);
     t.end();
   });
 
-  t.test('with "hotreplacement" on exported should not change when nothing changed', function(t) {
-    var moduleModule = Requirer('test/fixtures/module.js', { hotreplacement: true });
-    moduleModule.exports().newValue = 123;
-    t.equal(moduleModule.exports().newValue, 123);
+  t.test('exported module doesn’t not have access to "require"', function(t) {
+    var modulePack = requirer('test/fixtures/module.js');
+    t.throws(modulePack.exports().fs, /object is not a function/);
+    requirer.dispose(modulePack);
     t.end();
   });
 
-  t.test('with "hotreplacement" on exported should change when file changes', function(t) {
-    var moduleModule = Requirer('test/fixtures/module.js', { hotreplacement: true });
-    moduleModule.exports().newValue = 123;
-    var newTime = (Date.now() / 1000) + Math.floor( Math.random() * 100 );
-    fs.utimesSync(moduleModule._filename, newTime, newTime);
-    t.notEqual(moduleModule.exports().newValue, 123);
+  t.test('can read json', function(t) {
+    var jsonPack = requirer('test/fixtures/json.json');
+    t.equal(jsonPack.exports().value, 567);
+    requirer.dispose(jsonPack);
     t.end();
   });
 
-  t.test('exported module should not have access to "require"', function(t) {
-    var moduleModule = Requirer('test/fixtures/module.js');
-    t.throws(moduleModule.exports().fs, /object is not a function/);
+  t.test('can read plain text', function(t) {
+    var plainTextPack = requirer('test/fixtures/plain.txt');
+    t.equal(plainTextPack.exports(), 'hello\n');
+    requirer.dispose(plainTextPack);
+    t.end();
+  });
+
+  t.test('can read templates', function(t) {
+    var templatePack = requirer('test/fixtures/template.html');
+    var template = templatePack.exports();
+    t.ok(typeof template === 'function', 'template is a function');
+    t.equal(template({value:'template'}), 'this is a template\n', 'template evaluated');
+    requirer.dispose(templatePack);
     t.end();
   });
 
   t.end();
-
 });

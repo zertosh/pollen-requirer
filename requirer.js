@@ -1,143 +1,119 @@
 /**
- * Requirer lets you "require" modules without having them
- * register in Module._cache or have access to `require`.
+ * `requirer` lets you "require" modules without having them register
+ * in `Module._cache` or have access to the `require` function. Also
+ * works with ".json", treats ".html"/".tpl" as underscore templates,
+ * and others as plain text.
  */
 
 'use strict';
 
+// TODO: Add method to set "hotreload"
+// TODO: Handle symlinks
+
+var _ = require('underscore');
 var Module = require('module');
 var assert = require('assert');
 var fs = require('fs');
 var path = require('path');
 var vm = require('vm');
 
-var debug = require('debug')('requirer');
+var reIsJs = /\.js$/;
+var reIsJson = /\.json$/;
+var reIsTemplate = /\.(html|tpl)$/;
 
-/**
- * @param {string} filename
- * @param {object} opts
- * @param {boolean=} opts.hotreplacement
- * @constructor
- */
-function Requirer(filename, opts) {
-  assert.ok(typeof filename === 'string', 'Requirer must have a "filename"');
+function getMTime(/*string*/ path) {
+  return fs.statSync(path).mtime.getTime();
+}
 
-  if (!(this instanceof Requirer)) {
-    return new Requirer(filename, opts);
-  }
+function readFile(/*string*/ path) {
+  var content = fs.readFileSync(path, 'utf8');
+  // Remove byte order marker
+  var clean = content.charCodeAt(0) === 0xFEFF ? content.slice(1) : content;
+  return clean;
+}
 
-  /**
-   * @type {string}
-   * @private
-   */
-  this._filename = path.resolve(process.cwd(), filename);
+function assertNotDisposed(/*Pack*/ pack) {
+  assert(!pack._disposed, 'Attempting to use a disposed Pack');
+}
 
-  /**
-   * @type {boolean}
-   * @private
-   */
-  this._hotreplacement = opts && ('hotreplacement' in opts)
-      ? !!opts.hotreplacement : process.env.NODE_ENV !== 'production';
-
-  /**
-   * @type {?Object}
-   * @private
-   */
+function Pack(/*string*/ filename) /*Pack*/ {
+  this._disposed = false;
+  this._filename = filename;
+  this._hotreload = process.env.NODE_ENV !== 'production';
   this._module = null;
-
-  /**
-   * @type {?number}
-   * @private
-   */
   this._mtime = null;
 }
 
-/**
- * @return {number}
- * @private
- */
-Requirer.prototype._readMTime = function() {
-  if (debug.enabled) {
-    debug('Reading mtime for %s', this._filename);
-  }
-  var stat = fs.statSync(this._filename);
-  var mtime = stat.mtime.getTime();
-  return mtime;
-};
-
-/**
- * @return {string}
- * @private
- */
-var READ_FILE_OPTS = {encoding: 'utf8'};
-Requirer.prototype._readSource = function() {
-  if (debug.enabled) {
-    debug('Reading source for %s', this._filename);
-  }
-  var source = fs.readFileSync(this._filename, READ_FILE_OPTS);
-  return source;
-};
-
-/**
- * @return {?object}
- * @private
- */
-Requirer.prototype._compile = function() {
-  if (debug.enabled) {
-    debug('Compiling %s', this._filename);
-  }
-  var source = this._readSource();
-  var wrapper = Module.wrap(source);
-  var compiledWrapper = vm.runInThisContext(wrapper, this._filename);
-  var module_ = {exports: {}};
-  var args = [
-    module_.exports,
-    null /*require*/,
-    module_,
-    null /*__filename*/,
-    null /*__dirname*/];
-  compiledWrapper.apply(module_.exports, args);
-  return module_;
-};
-
-/**
- * Loads the module.
- * @return {Requirer}
- */
-Requirer.prototype.load = function() {
-  var currentMTime;
-  if (this._hotreplacement) {
-    currentMTime = this._readMTime();
-    if (debug.enabled && this._mtime && (currentMTime !== this._mtime)) {
-      debug('Hotreplacing %s', this._filename);
-    }
-    if (currentMTime !== this._mtime) {
-      this.reset();
+Pack.prototype._load = function() {
+  if (this._mtime === null) {
+    this._mtime = getMTime(this._filename);
+  } else if (this._hotreload) {
+    var mtime = getMTime(this._filename);
+    if (this._mtime !== mtime) {
+      this._mtime = mtime;
+      this._module = null;
     }
   }
-  if (!this._mtime) {
-    this._mtime = currentMTime || this._readMTime();
-  }
+
   if (!this._module) {
-    this._module = this._compile();
+    var source = readFile(this._filename);
+    var _module = {exports: {}};
+
+    if (reIsJs.test(this._filename)) {
+      var wrapper = Module.wrap(source);
+      var compiledWrapper = vm.runInThisContext(wrapper, this._filename);
+      compiledWrapper.apply(_module.exports, [
+        _module.exports,
+        null /*require*/,
+        _module,
+        null /*__filename*/,
+        null /*__dirname*/]);
+    } else if (reIsJson.test(this._filename)) {
+      _module.exports = JSON.parse(source);
+    } else if (reIsTemplate.test(this._filename)) {
+      _module.exports = _.template(source);
+    } else {
+      _module.exports = source;
+    }
+
+    this._module = _module;
   }
+
   return this;
 };
 
-/**
- * Removes the cached module and mtime.
- * @return {Requirer}
- */
-Requirer.prototype.reset = function() {
+Pack.prototype.reset = function() /*Pack*/ {
+  assertNotDisposed(this);
   this._mtime = this._module = null;
   return this;
 };
 
-/**
- * @return {Object?}
- */
-Requirer.prototype.exports = function() {
-  return this.load()._module.exports;
+Pack.prototype.exports = function() /*object*/ {
+  assertNotDisposed(this);
+  return this._load()._module.exports;
 };
 
-module.exports = Requirer;
+
+function requirer(filename_) {
+  assert(typeof filename_ === 'string', 'requirer: "filename" is required');
+  var filename = path.resolve(filename_);
+  if (!requirer._cache[filename]) {
+    requirer._cache[filename] = new Pack(filename);
+  }
+  return requirer._cache[filename];
+}
+
+requirer.dispose = function(/*Pack*/ pack) {
+  if (!pack) {
+    return;
+  }
+  assertNotDisposed(pack);
+  delete requirer._cache[pack._filename];
+  pack._mtime = pack._module = pack._hotreload = null;
+  pack._disposed = true;
+};
+
+requirer._cache = {};
+requirer.Pack = Pack;
+
+module.exports = requirer;
