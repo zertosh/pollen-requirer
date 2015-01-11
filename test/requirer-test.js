@@ -26,7 +26,7 @@ test('requirer', function(t) {
     var filename = 'test/fixtures/module.js';
     t.notOk(requirer.has(filename), 'does not have pack');
     var modulePack = requirer(filename);
-    t.not(requirer.has(filename), 'does have pack');
+    t.ok(requirer.has(filename), 'does have pack');
     requirer.dispose(modulePack);
     t.end();
   });

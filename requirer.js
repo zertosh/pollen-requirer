@@ -1,13 +1,12 @@
 /**
  * `requirer` lets you "require" modules without having them register
  * in `Module._cache` or have access to the `require` function. Also
- * works with ".json", treats ".html"/".tpl" as underscore templates,
+ * works with ".json", treats ".ejs"/".tpl" as underscore templates,
  * and others as plain text.
  */
 
 'use strict';
 
-// TODO: Add method to set "hotreload"
 // TODO: Handle symlinks
 
 var _ = require('underscore');
@@ -37,6 +36,41 @@ function assertNotDisposed(/*Pack*/ pack) {
   }
 }
 
+function load(pack) {
+  if (pack._hotreload) {
+    var mtime = getMTime(pack._filename);
+    if (pack._mtime !== mtime) {
+      pack._mtime = mtime;
+      pack._module = null;
+    }
+  }
+
+  if (!pack._module) {
+    var source = readFile(pack._filename);
+    var _module = {exports: null};
+
+    if (reIsJs.test(pack._filename)) {
+      var wrapper = Module.wrap(source);
+      var compiledWrapper = vm.runInThisContext(wrapper, pack._filename);
+      _module.exports = {};
+      compiledWrapper.apply(_module.exports, [
+        _module.exports,
+        null /*require*/,
+        _module,
+        null /*__filename*/,
+        null /*__dirname*/]);
+    } else if (reIsJson.test(pack._filename)) {
+      _module.exports = JSON.parse(source);
+    } else if (reIsTemplate.test(pack._filename)) {
+      _module.exports = _.template(source);
+    } else {
+      _module.exports = source;
+    }
+
+    pack._module = _module;
+  }
+}
+
 function Pack(/*string*/ filename) /*Pack*/ {
   this._disposed = false;
   this._filename = filename;
@@ -47,7 +81,8 @@ function Pack(/*string*/ filename) /*Pack*/ {
 
 Pack.prototype.exports = function() /*object*/ {
   assertNotDisposed(this);
-  return this._load()._module.exports;
+  load(this);
+  return this._module.exports;
 };
 
 Pack.prototype.reset = function() /*Pack*/ {
@@ -64,46 +99,6 @@ Pack.prototype.setHotReload = function(/*bool*/ hotreload) /*Pack*/ {
   this._hotreload = hotreload;
   return this;
 };
-
-Pack.prototype._load = function() /*Pack*/ {
-  var self = this;
-
-  if (self._hotreload) {
-    var mtime = getMTime(self._filename);
-    if (self._mtime !== mtime) {
-      self._mtime = mtime;
-      self._module = null;
-    }
-  }
-
-  if (!self._module) {
-    var source = readFile(self._filename);
-    var _module = {exports: null};
-
-    if (reIsJs.test(self._filename)) {
-      var wrapper = Module.wrap(source);
-      var compiledWrapper = vm.runInThisContext(wrapper, self._filename);
-      _module.exports = {};
-      compiledWrapper.apply(_module.exports, [
-        _module.exports,
-        null /*require*/,
-        _module,
-        null /*__filename*/,
-        null /*__dirname*/]);
-    } else if (reIsJson.test(self._filename)) {
-      _module.exports = JSON.parse(source);
-    } else if (reIsTemplate.test(self._filename)) {
-      _module.exports = _.template(source);
-    } else {
-      _module.exports = source;
-    }
-
-    self._module = _module;
-  }
-
-  return this;
-};
-
 
 function requirer(/*string*/ filename_) /*Pack*/ {
   if (typeof filename_ !== 'string') {
