@@ -60,6 +60,15 @@ test('requirer', function(t) {
     t.end();
   });
 
+  t.test('Pack#isFilename', function(t) {
+    var filename = 'test/fixtures/module.js';
+    var modulePack = requirer(filename);
+    t.ok(modulePack.isFilename(filename), 'knows its name');
+    t.notOk(modulePack.isFilename(filename + 'x'), 'knows what is not its name');
+    requirer.dispose(modulePack);
+    t.end();
+  });
+
   t.test('Pack#setHotReload', function(t) {
     process.env.NODE_ENV = 'production';
     var modulePack = requirer('test/fixtures/module.js');

@@ -85,6 +85,11 @@ Pack.prototype.exports = function() /*object*/ {
   return this._module.exports;
 };
 
+Pack.prototype.isFilename = function(/*string*/ filename) /*bool*/ {
+  assertNotDisposed(this);
+  return filename ? this._filename === path.resolve(filename) : false;
+};
+
 Pack.prototype.reset = function() /*Pack*/ {
   assertNotDisposed(this);
   this._mtime = this._module = null;
