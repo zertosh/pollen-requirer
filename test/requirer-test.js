@@ -18,6 +18,16 @@ test('requirer', function(t) {
     var modulePack = requirer('test/fixtures/module.js');
     t.ok(modulePack instanceof requirer.Pack, 'is a Pack instance');
     t.equal(requirer('test/fixtures/module.js'), modulePack, 'is the same Pack instance');
+    requirer.dispose(modulePack);
+    t.end();
+  });
+
+  t.test('has', function(t) {
+    var filename = 'test/fixtures/module.js';
+    t.notOk(requirer.has(filename), 'does not have pack');
+    var modulePack = requirer(filename);
+    t.not(requirer.has(filename), 'does have pack');
+    requirer.dispose(modulePack);
     t.end();
   });
 
@@ -50,11 +60,31 @@ test('requirer', function(t) {
     t.end();
   });
 
-
-  t.test('has "_mtime" after "exports()"', function(t) {
+  t.test('Pack#setHotReload', function(t) {
+    process.env.NODE_ENV = 'production';
     var modulePack = requirer('test/fixtures/module.js');
+    modulePack.setHotReload(false);
+    t.equal(modulePack._hotreload, false, 'disabled "hotreload" option');
+    modulePack.setHotReload(true);
+    t.equal(modulePack._hotreload, true, 'enabled "hotreload" option');
+    requirer.dispose(modulePack);
+    t.end();
+  });
+
+  t.test('has "_mtime" after "exports()" when "hotreload" is enabled', function(t) {
+    var modulePack = requirer('test/fixtures/module.js');
+    modulePack.setHotReload(true);
     modulePack.exports();
     t.ok(_.isNumber(modulePack._mtime), 'mtime is numeric');
+    requirer.dispose(modulePack);
+    t.end();
+  });
+
+  t.test('does not have "_mtime" after "exports()" when "hotreload" is disabled', function(t) {
+    var modulePack = requirer('test/fixtures/module.js');
+    modulePack.setHotReload(false);
+    modulePack.exports();
+    t.notOk(_.isNumber(modulePack._mtime), 'mtime is not numeric');
     requirer.dispose(modulePack);
     t.end();
   });
@@ -130,7 +160,7 @@ test('requirer', function(t) {
   });
 
   t.test('can read templates', function(t) {
-    var templatePack = requirer('test/fixtures/template.html');
+    var templatePack = requirer('test/fixtures/template.tpl');
     var template = templatePack.exports();
     t.ok(typeof template === 'function', 'template is a function');
     t.equal(template({value:'template'}), 'this is a template\n', 'template evaluated');

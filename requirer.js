@@ -12,28 +12,29 @@
 
 var _ = require('underscore');
 var Module = require('module');
-var assert = require('assert');
 var fs = require('fs');
 var path = require('path');
 var vm = require('vm');
 
 var reIsJs = /\.js$/;
 var reIsJson = /\.json$/;
-var reIsTemplate = /\.(html|tpl)$/;
+var reIsTemplate = /\.(ejs|tpl)$/;
 
-function getMTime(/*string*/ path) {
+function getMTime(/*string*/ path) /*number*/ {
   return fs.statSync(path).mtime.getTime();
 }
 
-function readFile(/*string*/ path) {
+function readFile(/*string*/ path) /*string*/ {
   var content = fs.readFileSync(path, 'utf8');
-  // Remove byte order marker
+  // remove byte order marker
   var clean = content.charCodeAt(0) === 0xFEFF ? content.slice(1) : content;
   return clean;
 }
 
 function assertNotDisposed(/*Pack*/ pack) {
-  assert(!pack._disposed, 'Attempting to use a disposed Pack');
+  if (pack._disposed) {
+    throw new Error('pollen-requirer: Attempting to use a disposed Pack');
+  }
 }
 
 function Pack(/*string*/ filename) /*Pack*/ {
@@ -44,42 +45,9 @@ function Pack(/*string*/ filename) /*Pack*/ {
   this._mtime = null;
 }
 
-Pack.prototype._load = function() {
-  if (this._mtime === null) {
-    this._mtime = getMTime(this._filename);
-  } else if (this._hotreload) {
-    var mtime = getMTime(this._filename);
-    if (this._mtime !== mtime) {
-      this._mtime = mtime;
-      this._module = null;
-    }
-  }
-
-  if (!this._module) {
-    var source = readFile(this._filename);
-    var _module = {exports: {}};
-
-    if (reIsJs.test(this._filename)) {
-      var wrapper = Module.wrap(source);
-      var compiledWrapper = vm.runInThisContext(wrapper, this._filename);
-      compiledWrapper.apply(_module.exports, [
-        _module.exports,
-        null /*require*/,
-        _module,
-        null /*__filename*/,
-        null /*__dirname*/]);
-    } else if (reIsJson.test(this._filename)) {
-      _module.exports = JSON.parse(source);
-    } else if (reIsTemplate.test(this._filename)) {
-      _module.exports = _.template(source);
-    } else {
-      _module.exports = source;
-    }
-
-    this._module = _module;
-  }
-
-  return this;
+Pack.prototype.exports = function() /*object*/ {
+  assertNotDisposed(this);
+  return this._load()._module.exports;
 };
 
 Pack.prototype.reset = function() /*Pack*/ {
@@ -88,20 +56,73 @@ Pack.prototype.reset = function() /*Pack*/ {
   return this;
 };
 
-Pack.prototype.exports = function() /*object*/ {
+Pack.prototype.setHotReload = function(/*bool*/ hotreload) /*Pack*/ {
   assertNotDisposed(this);
-  return this._load()._module.exports;
+  if (typeof hotreload !== 'boolean') {
+    throw new Error('pollen-requirer: "hotreload" value is required');
+  }
+  this._hotreload = hotreload;
+  return this;
+};
+
+Pack.prototype._load = function() /*Pack*/ {
+  var self = this;
+
+  if (self._hotreload) {
+    var mtime = getMTime(self._filename);
+    if (self._mtime !== mtime) {
+      self._mtime = mtime;
+      self._module = null;
+    }
+  }
+
+  if (!self._module) {
+    var source = readFile(self._filename);
+    var _module = {exports: null};
+
+    if (reIsJs.test(self._filename)) {
+      var wrapper = Module.wrap(source);
+      var compiledWrapper = vm.runInThisContext(wrapper, self._filename);
+      _module.exports = {};
+      compiledWrapper.apply(_module.exports, [
+        _module.exports,
+        null /*require*/,
+        _module,
+        null /*__filename*/,
+        null /*__dirname*/]);
+    } else if (reIsJson.test(self._filename)) {
+      _module.exports = JSON.parse(source);
+    } else if (reIsTemplate.test(self._filename)) {
+      _module.exports = _.template(source);
+    } else {
+      _module.exports = source;
+    }
+
+    self._module = _module;
+  }
+
+  return this;
 };
 
 
-function requirer(filename_) {
-  assert(typeof filename_ === 'string', 'requirer: "filename" is required');
+function requirer(/*string*/ filename_) /*Pack*/ {
+  if (typeof filename_ !== 'string') {
+    throw new Error('pollen-requirer: "filename" is required');
+  }
   var filename = path.resolve(filename_);
   if (!requirer._cache[filename]) {
     requirer._cache[filename] = new Pack(filename);
   }
   return requirer._cache[filename];
 }
+
+requirer.has = function(/*string*/ filename_) /*bool*/ {
+  if (!filename_) {
+    return false;
+  }
+  var filename = path.resolve(filename_);
+  return !!requirer._cache[filename];
+};
 
 requirer.dispose = function(/*Pack*/ pack) {
   if (!pack) {
