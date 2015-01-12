@@ -1,7 +1,7 @@
 /**
  * `requirer` lets you "require" modules without having them register
  * in `Module._cache` or have access to the `require` function. Also
- * works with ".json", treats ".ejs"/".tpl" as underscore templates,
+ * works with ".json", treats ".jst"/".tpl" as underscore templates,
  * and others as plain text.
  */
 
@@ -17,7 +17,7 @@ var vm = require('vm');
 
 var reIsJs = /\.js$/;
 var reIsJson = /\.json$/;
-var reIsTemplate = /\.(ejs|tpl)$/;
+var reIsTemplate = /\.(jst|tpl)$/;
 
 function getMTime(/*string*/ path) /*number*/ {
   return fs.statSync(path).mtime.getTime();
