@@ -12,8 +12,12 @@ var fs = require('fs');
 var path = require('path');
 var vm = require('vm');
 
-var reIsJs = /\.js$/;
-var reIsJson = /\.json$/;
+function endsWith(str, suffix) {
+  if (typeof str !== 'string' || typeof suffix !== 'string') {
+    return false;
+  }
+  return str.indexOf(suffix, str.length - suffix.length) !== -1;
+}
 
 function getMTime(/*string*/ path) /*number*/ {
   return fs.statSync(path).mtime.getTime();
@@ -45,7 +49,7 @@ function load(pack) {
     var source = readFile(pack._filename);
     var _module = {exports: null};
 
-    if (reIsJs.test(pack._filename)) {
+    if (endsWith(pack._filename, '.js')) {
       var wrapper = Module.wrap(source);
       var compiledWrapper = vm.runInThisContext(wrapper, pack._filename);
       _module.exports = {};
@@ -55,7 +59,7 @@ function load(pack) {
         _module,
         null /*__filename*/,
         null /*__dirname*/]);
-    } else if (reIsJson.test(pack._filename)) {
+    } else if (endsWith(pack._filename, '.json')) {
       _module.exports = JSON.parse(source);
     } else {
       _module.exports = source;
