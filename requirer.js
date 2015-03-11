@@ -7,9 +7,6 @@
 
 'use strict';
 
-// TODO: Handle symlinks
-
-var _ = require('underscore');
 var Module = require('module');
 var fs = require('fs');
 var path = require('path');
@@ -17,7 +14,6 @@ var vm = require('vm');
 
 var reIsJs = /\.js$/;
 var reIsJson = /\.json$/;
-var reIsTemplate = /\.(jst|tpl)$/;
 
 function getMTime(/*string*/ path) /*number*/ {
   return fs.statSync(path).mtime.getTime();
@@ -61,8 +57,6 @@ function load(pack) {
         null /*__dirname*/]);
     } else if (reIsJson.test(pack._filename)) {
       _module.exports = JSON.parse(source);
-    } else if (reIsTemplate.test(pack._filename)) {
-      _module.exports = _.template(source);
     } else {
       _module.exports = source;
     }

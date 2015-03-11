@@ -168,14 +168,5 @@ test('requirer', function(t) {
     t.end();
   });
 
-  t.test('can read templates', function(t) {
-    var templatePack = requirer('test/fixtures/template.tpl');
-    var template = templatePack.exports();
-    t.ok(typeof template === 'function', 'template is a function');
-    t.equal(template({value:'template'}), 'this is a template\n', 'template evaluated');
-    requirer.dispose(templatePack);
-    t.end();
-  });
-
   t.end();
 });

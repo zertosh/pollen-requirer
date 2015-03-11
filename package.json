@@ -18,11 +18,9 @@
   "scripts": {
     "test": "tape test/*.js"
   },
-  "dependencies": {
-    "underscore": "^1.7.0"
-  },
   "devDependencies": {
-    "tape": "^3.0.3"
+    "underscore": "^1.8.2",
+    "tape": "^3.5.0"
   },
   "engines": {
     "node": ">=0.10"
